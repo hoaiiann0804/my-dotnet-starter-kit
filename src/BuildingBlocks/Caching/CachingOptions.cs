@@ -1,0 +1,52 @@
+namespace FSH.Framework.Caching;
+
+/// <summary>
+/// Configuration for the HybridCache-backed caching building block.
+/// Bind from the <c>CachingOptions</c> configuration section.
+/// </summary>
+public sealed class CachingOptions
+{
+    /// <summary>Redis connection string. If empty, the L2 distributed cache falls back to in-memory.</summary>
+    public string Redis { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Namespace for every key and channel the framework writes to Redis (cache entries, Data
+    /// Protection key ring, idempotency locks, quota counters, SignalR backplane). Set it per
+    /// application and environment, e.g. <c>MyApp:prod</c>, whenever applications share a Redis
+    /// server — a <c>defaultDatabase</c> index alone does not isolate the SignalR backplane, because
+    /// pub/sub ignores databases. Opt-in: empty (the default) keeps the unprefixed layout. Must not
+    /// contain whitespace or <c>{</c>/<c>}</c> (rejected at startup). Turning it on for an existing
+    /// deployment moves the Data Protection key ring — copy <c>DataProtection-Keys</c> to
+    /// <c>{prefix}:DataProtection-Keys</c> first, or DP-protected data (webhook signing secrets,
+    /// cookies, reset tokens) stops unprotecting — and starts a cold cache. During a rolling deploy
+    /// old and new pods sit on different SignalR channels until the rollout finishes.
+    /// See <see cref="FSH.Framework.Core.Common.RedisKeyPrefix"/>.
+    /// </summary>
+    public string KeyPrefix { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Enable SSL/TLS for Redis connection. If null, uses the connection string default.
+    /// Aspire 13.x defaults Redis to TLS on the primary port; set to <c>false</c> when wiring via
+    /// the plain-TCP secondary endpoint (see <c>AppHost.cs</c>).
+    /// </summary>
+    public bool? EnableSsl { get; set; }
+
+    /// <summary>
+    /// Total lifetime of a cache entry across both L1 (in-process) and L2 (Redis).
+    /// Applied as the default when the caller doesn't pass <c>HybridCacheEntryOptions</c>.
+    /// </summary>
+    public TimeSpan DefaultExpiration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Lifetime of the L1 in-process copy. Kept short to bound cross-node staleness after
+    /// a <c>RemoveAsync</c>/<c>RemoveByTagAsync</c> on a peer node, since HybridCache has no
+    /// built-in L1 backplane. See <c>docs/caching.md</c> for the tradeoff.
+    /// </summary>
+    public TimeSpan DefaultLocalCacheExpiration { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>Maximum key length accepted by HybridCache. Keys longer than this are rejected.</summary>
+    public int MaximumKeyLength { get; set; } = 1024;
+
+    /// <summary>Maximum serialized payload size in bytes. Oversized entries are silently skipped (logged).</summary>
+    public long MaximumPayloadBytes { get; set; } = 1024 * 1024; // 1 MB
+}
